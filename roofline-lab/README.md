@@ -1,4 +1,4 @@
-# Roofline Lab 2.0 · Memory × Compute × Models
+# Roofline Lab 2.1 · Separate Prefill and Decode Rooflines
 
 Self-contained HTML teaching simulator. Open [`index.html`](index.html) in a browser or access the GitHub Pages route `/roofline-lab/` after Pages deployment.
 
@@ -7,7 +7,7 @@ Self-contained HTML teaching simulator. Open [`index.html`](index.html) in a bro
 - **Memory / transfer:** UFS 5.0, PCIe 5.0/6.0 x16, LPDDR5X 4/6×16-bit, LPDDR6 4/6×24-bit, HBM3E H200/B200, HBF Grade 1/3.
 - **Compute:** Qualcomm Hexagon (Snapdragon X Elite / X2 Elite), MediaTek Genio 700/1200, NVIDIA H200/B200, Google TPU v6e/TPU7x, OpenAI/Broadcom Jalapeño (manual peak only), custom.
 - **Models:** DeepSeek V4.1 Flash (552B backbone + 196B Engram, 16B decode active), Qwen3.8 Flash Next (125B backbone + 51B n-gram, 6B active), GLM-5.3 Flash (320B/18B).
-- **Outputs:** aggregate decode TPS, per-request TPS, footprint-vs-capacity, memory vs compute bottleneck, Roofline overlay, Batch sweep. SVG export and shareable URL query settings.
+- **Outputs:** Prefill input tokens/s and Decode output TPS shown separately for each model, approximate Prefill duration and Decode TPOT, two independent Roofline plots with non-overlapping external model legends and proximity-spread markers, selectable phase Batch sweep, footprint-versus-capacity, model bottleneck, SVG export (Decode) and shareable URL query settings.
 
 ## Important modeling assumptions
 
@@ -22,6 +22,15 @@ These results are **not real measured inference benchmarks**, and must not be qu
 7. Total weight footprint includes all main and extra parameter tables (at user-selected weight bits) plus model-dependent KV per context length and 8% capacity margin. If the selected tier cannot hold the total, the model marks **capacity exceeded** and TPS remains a *hypothetical bound only*, not executable without sharding/caching/offloading.
 8. Memory device figures are spec/theoretical bandwidth. LPDDR5X 8.533 Gb/s per pin and LPDDR6 10.667 Gb/s per pin with 8/9 payload efficiency are **explicit model assumptions**, not guaranteed per-SoC configurations. PCIe x16 is one-way link approximation, not an SSD read rate. HBF numbers are from an OCP draft speed-grade table and do not represent measured sustained bandwidth.
 9. Jalapeño is publicly announced but has no verified TOPS value in the included sources. The preset shows an unavailable estimate until a custom compute peak is entered.
+
+## How Prefill and Decode differ (v2.1)
+
+- **Decode:** generates one output token per sequence per step. Aggregate output TPS = `batch / max(decode_compute_seconds, decode_memory_seconds)`. The displayed TPOT estimate equals that step duration; it excludes runtime overhead and requests may be grouped by a real scheduler differently.
+- **Prefill:** processes the selected **prompt tokens per request**, distinct from the **existing decode context**. Total input tokens are `N = batch × prompt_tokens`. Analytical input tok/s = `N / max(prefill_compute_seconds, prefill_memory_seconds)`. Prefill duration is a phase estimate, **not full TTFT**.
+- The Prefill model counts `2 × active_parameters × N` operations with a small heuristic factor. Its memory traffic assumes shared weights plus the expert union over the **entire prompt** can be reused ideally, with simplified KV writes and sparse lookup reads. This is an **optimistic upper-bound abstraction**, especially on storage/interconnects: real prefill may re-fetch weights per tile/chunk and incur nontrivial attention/activation traffic.
+- The same configurable effective compute and bandwidth assumptions apply to both phases for comparison; **actual Prefill kernel efficiency normally differs from Decode**, and no calibration is claimed.
+- Each phase has a separate Roofline curve and dots. Exact marker coordinates retain mathematical meaning; if model markers would collide at chart resolution, small visually displaced marker symbols are connected back to their original coordinates. Numeric AI and TPS are shown outside the plot in a model legend. Click a marker or legend to select a model. Hover/focus shows detailed values.
+- Batch sweep has a **Decode/Prefill selector**; its Y-axis is aggregate output tokens/s in Decode and aggregate input tokens/s in Prefill. These are **not interchangeable performance numbers**.
 
 ## Model source material
 
